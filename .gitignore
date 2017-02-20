@@ -1,0 +1,5 @@
+yfv-analysis.sublime-project
+yfv-analysis.sublime-workspace
+*.sqlite
+*.dir
+*-checkpoint.ipynb
