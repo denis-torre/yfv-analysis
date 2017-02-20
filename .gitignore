@@ -3,3 +3,4 @@ yfv-analysis.sublime-workspace
 *.sqlite
 *.dir
 *-checkpoint.ipynb
+*.pyc
