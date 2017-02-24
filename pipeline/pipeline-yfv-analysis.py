@@ -121,16 +121,34 @@ def getSampleAnnotations(infiles, outfile):
 
 def getGeneAnnotations(infile, outfile):
 
-	# Read dataframe
-	geneAnnotationDataframe = pd.read_table(infile, comment='#')
+	# Read platform dataframe
+	platformAnnotationDataframe = pd.read_table(infile, comment='#')
+
+	# Filter
+	platformAnnotationDataframe = platformAnnotationDataframe[platformAnnotationDataframe['Species Scientific Name'] == 'Rhesus macaque']
+
+	# Fix entrez IDs
+	platformAnnotationDataframe['ENTREZ_GENE_ID'] = [x.split(' /// ')[0] if type(x) is str else x for x in platformAnnotationDataframe['ENTREZ_GENE_ID']]
 
 	# Get columns
-	columnDict = {'ID': 'probe_id', 'Gene Symbol': 'gene_symbol', 'ENTREZ_GENE_ID': 'entrez_gene_id', 'Species Scientific Name': 'species'}
+	columnDict = {'ID': 'probe_id', 'ENTREZ_GENE_ID': 'ENTREZID'}
 
 	# Get subset
-	geneAnnotationDataframe = geneAnnotationDataframe[columnDict.keys()].rename(columns=columnDict)
+	platformAnnotationDataframe = platformAnnotationDataframe[columnDict.keys()].rename(columns=columnDict)
 
-	# Save
+	# Get Entrez IDs
+	entrezIDs = list(set(platformAnnotationDataframe['ENTREZID'].dropna()))
+
+	# Get conversion to gene symbol
+	conversionDataframe = r.convertIDs(entrezIDs, orgDb='org.Mmu.eg.db')
+
+	# Convert to dataframe
+	conversionDataframe = com.convert_robj(conversionDataframe)
+
+	# Merge dataframes
+	geneAnnotationDataframe = platformAnnotationDataframe.merge(conversionDataframe, on='ENTREZID', how='left').rename(columns={'ENTREZID': 'entrez_gene_id', 'SYMBOL': 'gene_symbol'})
+
+	# Write file
 	geneAnnotationDataframe.to_csv(outfile, sep='\t', index=False)
 
 #######################################################
@@ -140,14 +158,14 @@ def getGeneAnnotations(infile, outfile):
 #######################################################
 
 #############################################
-########## 3. Gene Expression Data
+########## 1. Gene Expression Data
 #############################################
 
-@follows(mkdir('f2-raw_expression.dir'))
+@follows(mkdir('f2-expression.dir'))
 
 @files([seriesMatrixFile,
 		getGeneAnnotations],
-	   'f2-raw_expression.dir/yfv-gene_expression.txt')
+	   'f2-expression.dir/yfv-gene_expression.txt')
 
 def getGeneExpressionData(infiles, outfile):
 
@@ -161,7 +179,7 @@ def getGeneExpressionData(infiles, outfile):
 	geneAnnotationDataframe = pd.read_table(geneAnnotationFile, index_col='probe_id')
 
 	# Get probe to gene conversion dict
-	probe2gene = geneAnnotationDataframe.loc[geneAnnotationDataframe['species'] == 'Rhesus macaque', ['gene_symbol']].dropna().to_dict()['gene_symbol']
+	probe2gene = geneAnnotationDataframe['gene_symbol'].dropna().to_dict()
 
 	# Get gene symbols
 	expressionDataframe['gene_symbol'] = [probe2gene[x] if x in probe2gene.keys() else np.nan for x in expressionDataframe.index]
